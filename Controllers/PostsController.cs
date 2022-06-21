@@ -18,39 +18,51 @@ namespace csharp_blog_backend.Controllers
         public PostsController(BlogContext context)
         {
             _context = context;
+
+
         }
 
         // GET: api/Posts
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Post>>> GetPosts()
+        public async Task<ActionResult<IEnumerable<Post>>> Getposts(string? stringa)
         {
-          if (_context.Posts == null)
-          {
-              return NotFound();
-          }
-            return await _context.Posts.ToListAsync();
+            if (_context.posts == null)
+            {
+                return NotFound();
+            }
+            if (stringa != null) { return await _context.posts.Where(m => m.Title.Contains(stringa) || m.Description.Contains(stringa)).ToListAsync(); }
+
+            else { return await _context.posts.ToListAsync(); }
         }
+
+
+
 
         // GET: api/Posts/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Post>> GetPost(int id)
         {
-          if (_context.Posts == null)
-          {
-              return NotFound();
-          }
-            var post = await _context.Posts.FindAsync(id);
+            if (_context.posts == null)
+            {
+                return NotFound();
+            }
+            var post = await _context.posts.FindAsync(id);
 
             if (post == null)
             {
                 return NotFound();
             }
 
+
+
             return post;
         }
 
+
+
         // PUT: api/Posts/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+
         [HttpPut("{id}")]
         public async Task<IActionResult> PutPost(int id, Post post)
         {
@@ -80,36 +92,97 @@ namespace csharp_blog_backend.Controllers
             return NoContent();
         }
 
-        // POST: api/Posts
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // POST: api/Posts     questo controller funziona per la gestione del file
+        // aggiunto per gestire il passaggio di un file
+
         [HttpPost]
-        public async Task<ActionResult<Post>> PostPost(Post post)
+        public async Task<ActionResult<Post>> PostPost([FromForm] Post post)
         {
-          if (_context.Posts == null)
-          {
-              return Problem("Entity set 'BlogContext.Posts'  is null.");
-          }
-            _context.Posts.Add(post);
+            FileInfo fileInfo = new FileInfo(post.File.FileName);
+            //post.Image = $"FileLocal{fileInfo.Extension}"; // qwuesto è quello che viene salvato nel DB
+
+            Guid g = Guid.NewGuid();
+
+            string fileName = g.ToString() + fileInfo.Extension;
+
+
+
+            //Estrazione File e salvataggio su file system.
+            //Agendo su Request ci prendiamo il file e lo salviamo su file system.
+
+            string Image = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot\\Files");
+
+            if (!Directory.Exists(Image))
+                Directory.CreateDirectory(Image);
+
+
+            string fileNameWithPath = Path.Combine(Image, fileName);
+
+
+            using (var stream = new FileStream(fileNameWithPath, FileMode.Create))
+            {
+                post.File.CopyTo(stream);
+            }
+
+
+            post.Image = "https://localhost:5000/Files/" + fileName;
+
+
+            // salviamo anche il file come  varBinaryMAx nel DB
+            //in questa parte c'è il salvataggio a db per un file blog
+
+            byte[] b;
+
+            //per leggerlo in html basta usare <img src="data:image/png;base64,iVBORw0KGgoAAAANSU ...">
+
+            using (BinaryReader br = new BinaryReader(post.File.OpenReadStream()))
+
+            {
+                post.ImageBytes = br.ReadBytes((int)post.File.OpenReadStream().Length);
+            }
+
+
+
+            _context.posts.Add(post);
             await _context.SaveChangesAsync();
 
             return CreatedAtAction("GetPost", new { id = post.Id }, post);
         }
 
+
+
+        // POST: api/Posts
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // Questa parte di controller gestisce il salvataggio da stringa (senza file ) 
+
+        //[HttpPost]
+        //public async Task<ActionResult<Post>> PostPost(Post post)
+        //{
+        //    if (_context.posts == null)
+        //    {
+        //        return Problem("Entity set 'BlogContext.posts'  is null.");
+        //    }
+        //    _context.posts.Add(post);
+        //    await _context.SaveChangesAsync();
+
+        //    return CreatedAtAction("GetPost", new { id = post.Id }, post);
+        //}
+
         // DELETE: api/Posts/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePost(int id)
         {
-            if (_context.Posts == null)
+            if (_context.posts == null)
             {
                 return NotFound();
             }
-            var post = await _context.Posts.FindAsync(id);
+            var post = await _context.posts.FindAsync(id);
             if (post == null)
             {
                 return NotFound();
             }
 
-            _context.Posts.Remove(post);
+            _context.posts.Remove(post);
             await _context.SaveChangesAsync();
 
             return NoContent();
@@ -117,7 +190,7 @@ namespace csharp_blog_backend.Controllers
 
         private bool PostExists(int id)
         {
-            return (_context.Posts?.Any(e => e.Id == id)).GetValueOrDefault();
+            return (_context.posts?.Any(e => e.Id == id)).GetValueOrDefault();
         }
     }
 }
